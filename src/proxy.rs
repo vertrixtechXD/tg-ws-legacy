@@ -645,7 +645,7 @@ async fn cfproxy_acquire_ws(
     is_media: bool,
     cancel_token: &CancellationToken,
 ) -> Option<(RawWebSocket, String)> {
-    let (enabled, active, domains) = {
+    let (enabled, _active, domains) = {
         let cfg = CFPROXY.read();
         (
             CFPROXY_ENABLED.load(Ordering::Relaxed),
@@ -657,11 +657,9 @@ async fn cfproxy_acquire_ws(
         return None;
     }
 
-    let mut ordered = vec![active.clone()];
-    for d in &domains {
-        if *d != active {
-            ordered.push(d.clone());
-        }
+    let ordered = crate::balancer::BALANCER.read().get_domains_for_dc(dc);
+    if ordered.is_empty() {
+        return None;
     }
 
     let m_tag = media_tag(is_media);
@@ -710,8 +708,10 @@ async fn cfproxy_acquire_ws(
 
     match ws {
         Some(w) => {
-            if !chosen_domain.is_empty() && chosen_domain != active {
-                set_active_domain_and_save(&chosen_domain);
+            if !chosen_domain.is_empty() {
+                if crate::balancer::BALANCER.write().update_domain_for_dc(dc, &chosen_domain) {
+                    linfo!(" CF домен для DC{} -> {}", dc, chosen_domain);
+                }
             }
             Some((w, chosen_domain))
         }

@@ -209,13 +209,7 @@ fn cfproxy_cache_path() -> Option<PathBuf> {
     Some(PathBuf::from(dir).join(CFPROXY_CACHE_FILE_NAME))
 }
 
-fn cfproxy_active_domain_path() -> Option<PathBuf> {
-    let dir = CFPROXY.read().cache_dir.trim().to_string();
-    if dir.is_empty() {
-        return None;
-    }
-    Some(PathBuf::from(dir).join(CFPROXY_ACTIVE_FILE_NAME))
-}
+// Активный домен больше не сохраняется в отдельный файл. Балансер работает в памяти.
 
 fn load_cfproxy_domains_from_cache() -> Vec<String> {
     let path = match cfproxy_cache_path() {
@@ -230,17 +224,7 @@ fn load_cfproxy_domains_from_cache() -> Vec<String> {
     merge_cfproxy_domains(&[list])
 }
 
-fn load_active_cfproxy_domain() -> String {
-    let path = match cfproxy_active_domain_path() {
-        Some(p) => p,
-        None => return String::new(),
-    };
-    let data = match std::fs::read_to_string(&path) {
-        Ok(d) => d,
-        Err(_) => return String::new(),
-    };
-    normalize_cf_domain(&data)
-}
+
 
 fn save_cfproxy_domains_to_cache(domains: &[String]) {
     let path = match cfproxy_cache_path() {
@@ -262,25 +246,7 @@ fn save_cfproxy_domains_to_cache(domains: &[String]) {
     }
 }
 
-fn save_active_cfproxy_domain(domain: &str) {
-    let path = match cfproxy_active_domain_path() {
-        Some(p) => p,
-        None => return,
-    };
-    let d = normalize_cf_domain(domain);
-    if d.is_empty() {
-        return;
-    }
-    if let Some(parent) = path.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            ldebug!(" CF: active-domain кеш создать не удалось: {}", e);
-            return;
-        }
-    }
-    if let Err(e) = std::fs::write(&path, d) {
-        ldebug!(" CF: active-domain кеш сохранить не удалось: {}", e);
-    }
-}
+
 
 fn should_refresh_cfproxy_domains() -> bool {
     let path = match cfproxy_cache_path() {
@@ -301,44 +267,29 @@ fn should_refresh_cfproxy_domains() -> bool {
     }
 }
 
-fn set_active_cfproxy_domain_locked(cfg: &mut CfproxyConfig, preferred: &str) {
-    if cfg.domains.is_empty() {
-        cfg.active = String::new();
-        return;
-    }
-    let preferred = normalize_cf_domain(preferred);
-    for d in &cfg.domains {
-        if *d == preferred {
-            cfg.active = d.clone();
-            return;
-        }
-    }
-    cfg.active = cfg.domains[0].clone();
-}
+
 
 pub fn init_cfproxy_domains() {
     let defaults = default_cfproxy_domains();
     let cached = load_cfproxy_domains_from_cache();
-    let persisted_active = load_active_cfproxy_domain();
 
     let mut cfg = CFPROXY.write();
     if !cfg.user_domain.is_empty() {
         let ud = cfg.user_domain.clone();
         cfg.domains = vec![ud.clone()];
-        cfg.active = ud;
+        crate::balancer::BALANCER.write().update_domains_list(&cfg.domains);
         return;
     }
 
     if !cached.is_empty() {
         let n = cached.len();
         cfg.domains = merge_cfproxy_domains(&[cached, defaults]);
+        crate::balancer::BALANCER.write().update_domains_list(&cfg.domains);
         drop(cfg);
         linfo!(" CF: кеш доменов загружен ({} шт.)", n);
-        let mut cfg = CFPROXY.write();
-        set_active_cfproxy_domain_locked(&mut cfg, &persisted_active);
     } else {
         cfg.domains = defaults;
-        set_active_cfproxy_domain_locked(&mut cfg, &persisted_active);
+        crate::balancer::BALANCER.write().update_domains_list(&cfg.domains);
     }
 }
 
@@ -415,10 +366,9 @@ pub async fn try_refresh_cfproxy_domains() -> bool {
             if !cfg.user_domain.is_empty() {
                 return true;
             }
-            let current_active = cfg.active.clone();
             cfg.domains = merged.clone();
-            set_active_cfproxy_domain_locked(&mut cfg, &current_active);
         }
+        crate::balancer::BALANCER.write().update_domains_list(&merged);
         save_cfproxy_domains_to_cache(&merged);
         linfo!(" CF: список доменов обновлен ({} шт.)", new_domains.len());
         return true;
@@ -626,7 +576,7 @@ pub async fn cf_connect_domain(
 }
 
 pub fn log_cf_conn_error(msg: &str, err: &WsError) {
-    if let WsError::Io(ref e) = err {
+    if let WsError::Io(e) = err {
         if e.kind() == std::io::ErrorKind::ConnectionReset {
             return;
         }
@@ -639,21 +589,6 @@ pub fn log_cf_conn_error(msg: &str, err: &WsError) {
 }
 
 // активный домен set/save
-pub fn set_active_domain_and_save(chosen: &str) {
-    let prev_active = CFPROXY.read().active.clone();
-    if !chosen.is_empty() && chosen != prev_active {
-        {
-            let mut cfg = CFPROXY.write();
-            cfg.active = chosen.to_string();
-        }
-        let chosen_owned = chosen.to_string();
-        if tokio::runtime::Handle::try_current().is_ok() {
-            tokio::task::spawn_blocking(move || {
-                save_active_cfproxy_domain(&chosen_owned);
-            });
-        } else {
-            save_active_cfproxy_domain(&chosen_owned);
-        }
-        linfo!(" CF домен  {}", chosen);
-    }
+pub fn set_active_domain_and_save(_chosen: &str) {
+    // Больше не используется для файлов. Балансер обновляется внутри proxy.rs
 }

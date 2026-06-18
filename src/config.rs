@@ -237,7 +237,7 @@ pub fn human_bytes(n: i64) -> String {
 #[cfg(target_os = "android")]
 fn android_log_line(line: &str) {
     use std::ffi::CString;
-    extern "C" {
+    unsafe extern "C" {
         fn __android_log_print(prio: i32, tag: *const i8, fmt: *const i8, ...) -> i32;
     }
     const ANDROID_LOG_INFO: i32 = 4;

@@ -31,9 +31,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Color
 import android.os.Build
+import androidx.compose.foundation.border
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun FloatingToolbar(
@@ -233,6 +234,36 @@ fun FloatingToolbar(
                             Spacer(modifier = Modifier.height(6.dp))
                         }
                     }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    val prefs = LocalContext.current.getSharedPreferences("lang_prefs", android.content.Context.MODE_PRIVATE)
+                    val currentLang = prefs.getString("app_language", "ru") ?: "ru"
+                    val activity = LocalContext.current as? android.app.Activity
+                    
+                    Text(
+                        "Language / Язык",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 6.dp, start = 4.dp)
+                    )
+                    ThemeOption(
+                        label = "Русский",
+                        selected = currentLang == "ru",
+                        onClick = {
+                            prefs.edit().putString("app_language", "ru").apply()
+                            activity?.recreate()
+                            isExpanded = false
+                        }
+                    )
+                    ThemeOption(
+                        label = "English",
+                        selected = currentLang == "en",
+                        onClick = {
+                            prefs.edit().putString("app_language", "en").apply()
+                            activity?.recreate()
+                            isExpanded = false
+                        }
+                    )
                 }
             }
         }
@@ -241,7 +272,7 @@ fun FloatingToolbar(
 
 @Composable
 private fun ThemeOption(
-    icon: Int,
+    icon: Int? = null,
     label: String,
     selected: Boolean,
     onClick: () -> Unit
@@ -257,13 +288,15 @@ private fun ThemeOption(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Icon(
-                painter = painterResource(id = icon),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (icon != null) {
+                Icon(
+                    painter = painterResource(id = icon),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,

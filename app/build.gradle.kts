@@ -12,8 +12,8 @@ android {
     defaultConfig {
         applicationId = "com.amurcanov.tgwsproxy"
         targetSdk = 35
-        versionCode = 122
-        versionName = "1.2.2"
+        versionCode = 123
+        versionName = "1.2.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -144,4 +144,5 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.14.0@aar")
     debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.appcompat:appcompat:1.6.1")
 }

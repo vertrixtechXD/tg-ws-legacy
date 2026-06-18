@@ -3,6 +3,7 @@ pub mod config;
 pub mod crypto;
 pub mod proxy;
 pub mod ws;
+pub mod balancer;
 
 use config::*;
 use once_cell::sync::OnceCell;
@@ -56,7 +57,7 @@ fn cstr_to_string(p: *const c_char) -> String {
 
 /// # Safety
 /// Указатели должны быть валидными C-строками (или null).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn StartProxy(
     c_host: *const c_char,
     port: c_int,
@@ -142,7 +143,7 @@ pub unsafe extern "C" fn StartProxy(
     0
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn StopProxy() -> c_int {
     let cell = state_cell();
     let mut guard = cell.lock();
@@ -176,7 +177,7 @@ pub extern "C" fn StopProxy() -> c_int {
     0
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn SetPoolSize(size: c_int) {
     let mut n = size;
     if n < 2 {
@@ -190,7 +191,7 @@ pub extern "C" fn SetPoolSize(size: c_int) {
 
 /// # Safety
 /// `c_cache_dir` — валидная C-строка или null.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn SetCfProxyCacheDir(c_cache_dir: *const c_char) {
     let dir = cstr_to_string(c_cache_dir);
     CFPROXY.write().cache_dir = dir.trim().to_string();
@@ -198,7 +199,7 @@ pub unsafe extern "C" fn SetCfProxyCacheDir(c_cache_dir: *const c_char) {
 
 /// # Safety
 /// `c_user_domain` — валидная C-строка или null.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn SetCfProxyConfig(
     enabled: c_int,
     _priority: c_int,
@@ -216,7 +217,7 @@ pub unsafe extern "C" fn SetCfProxyConfig(
 
 /// # Safety
 /// `c_secret` — валидная C-строка или null.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn SetSecret(c_secret: *const c_char) {
     let s = cstr_to_string(c_secret);
     if s.len() != 32 {
@@ -228,13 +229,13 @@ pub unsafe extern "C" fn SetSecret(c_secret: *const c_char) {
     *PROXY_SECRET.write() = s;
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn GetStats() -> *mut c_char {
     let s = STATS.summary();
     CString::new(s).unwrap_or_default().into_raw()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn GetSecretWithPrefix() -> *mut c_char {
     let sec = PROXY_SECRET.read().clone();
     CString::new(format!("dd{}", sec)).unwrap_or_default().into_raw()
@@ -242,10 +243,12 @@ pub extern "C" fn GetSecretWithPrefix() -> *mut c_char {
 
 /// # Safety
 /// `p` должен быть указателем, ранее возвращённым из этой библиотеки.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn FreeString(p: *mut c_char) {
     if p.is_null() {
         return;
     }
-    let _ = CString::from_raw(p);
+    unsafe {
+        let _ = CString::from_raw(p);
+    }
 }
