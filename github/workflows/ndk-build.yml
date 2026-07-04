@@ -1,0 +1,72 @@
+name: Build libtgwsproxy.so (Android API 16+)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'rust/**'
+      - '.github/workflows/ndk-build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - armv7-linux-androideabi
+          - aarch64-linux-android
+          - i686-linux-android
+          - x86_64-linux-android
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: amurcanov/tg-ws-proxy-android
+          path: core
+          submodules: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25c
+          add-to-path: true
+
+      - name: Build .so (API 16)
+        working-directory: core
+        run: |
+          if [[ "${{ matrix.target }}" == "armv7-linux-androideabi" ]]; then API=16; else API=21; fi
+          cargo ndk -t ${{ matrix.target }} -p $API --platform $API build --release
+          mkdir -p out
+          find target -name "libtgwsproxy.so" -exec cp {} out/libtgwsproxy-${{ matrix.target }}.so \;
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libtgwsproxy-${{ matrix.target }}
+          path: core/out/*.so
+
+  pack:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: libs
+          merge-multiple: true
+      - run: |
+          mkdir -p jniLibs/armeabi-v7a jniLibs/arm64-v8a jniLibs/x86 jniLibs/x86_64
+          cp libs/libtgwsproxy-armv7-linux-androideabi.so jniLibs/armeabi-v7a/libtgwsproxy.so || true
+          cp libs/libtgwsproxy-aarch64-linux-android.so jniLibs/arm64-v8a/libtgwsproxy.so || true
+          cp libs/libtgwsproxy-i686-linux-android.so jniLibs/x86/libtgwsproxy.so || true
+          cp libs/libtgwsproxy-x86_64-linux-android.so jniLibs/x86_64/libtgwsproxy.so || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jniLibs-all
+          path: jniLibs
