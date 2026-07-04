@@ -5,7 +5,7 @@ on:
 
 jobs:
   build-armv7:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -16,16 +16,23 @@ jobs:
           targets: armv7-linux-androideabi
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --version 3.5.4 --locked
-      - uses: nttld/setup-ndk@v1
+      - name: Setup NDK r25c
+        id: ndk
+        uses: nttld/setup-ndk@v1
         with:
           ndk-version: r25c
           add-to-path: true
+          local-cache: true
       - name: Build armv7 API 19
         working-directory: core
         env:
           CARGO_NET_RETRY: 3
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.ndk.outputs.ndk-path }}
+          NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
           RUSTFLAGS: "-C link-arg=-Wl,--allow-shlib-undefined"
         run: |
+          export PATH="${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
           cargo ndk -t armeabi-v7a --platform 19 -o ./jniLibs build --release
           mkdir -p out
           cp jniLibs/armeabi-v7a/libtgwsproxy.so out/
@@ -35,7 +42,7 @@ jobs:
           path: core/out/*.so
 
   build-arm64:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,14 +53,21 @@ jobs:
           targets: aarch64-linux-android
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --version 3.5.4 --locked
-      - uses: nttld/setup-ndk@v1
+      - name: Setup NDK r25c
+        id: ndk
+        uses: nttld/setup-ndk@v1
         with:
           ndk-version: r25c
           add-to-path: true
-      - name: Build arm64 API 24
+          local-cache: true
+      - name: Build arm64 API 21
         working-directory: core
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.ndk.outputs.ndk-path }}
+          NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: |
-          cargo ndk -t arm64-v8a --platform 24 -o ./jniLibs build --release
+          cargo ndk -t arm64-v8a --platform 21 -o ./jniLibs build --release
           mkdir -p out
           cp jniLibs/arm64-v8a/libtgwsproxy.so out/
       - uses: actions/upload-artifact@v4
