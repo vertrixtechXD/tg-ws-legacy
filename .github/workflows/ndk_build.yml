@@ -14,7 +14,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: armv7-linux-androideabi
-      - run: cargo install cargo-ndk --locked
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 3.5.4 --locked
       - uses: nttld/setup-ndk@v1
         with:
           ndk-version: r25c
@@ -25,9 +26,9 @@ jobs:
           CARGO_NET_RETRY: 3
           RUSTFLAGS: "-C link-arg=-Wl,--allow-shlib-undefined"
         run: |
-          cargo ndk -t armv7-linux-androideabi -p 19 --platform 19 build --release
+          cargo ndk -t armeabi-v7a --platform 19 -o ./jniLibs build --release
           mkdir -p out
-          cp target/armv7-linux-androideabi/release/libtgwsproxy.so out/
+          cp jniLibs/armeabi-v7a/libtgwsproxy.so out/
       - uses: actions/upload-artifact@v4
         with:
           name: libtgwsproxy-armeabi-v7a-api19
@@ -43,17 +44,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
-      - run: cargo install cargo-ndk --locked
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 3.5.4 --locked
       - uses: nttld/setup-ndk@v1
         with:
           ndk-version: r25c
           add-to-path: true
-      - name: Build arm64 API 21
+      - name: Build arm64 API 24
         working-directory: core
         run: |
-          cargo ndk -t aarch64-linux-android -p 21 build --release
+          cargo ndk -t arm64-v8a --platform 24 -o ./jniLibs build --release
           mkdir -p out
-          cp target/aarch64-linux-android/release/libtgwsproxy.so out/
+          cp jniLibs/arm64-v8a/libtgwsproxy.so out/
       - uses: actions/upload-artifact@v4
         with:
           name: libtgwsproxy-arm64-v8a
